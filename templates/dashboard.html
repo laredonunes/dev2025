@@ -1,0 +1,131 @@
+{% extends "layout.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+    <h2>Dashboard de Atividade</h2>
+    <div class="dashboard-grid">
+        <div class="content-box">
+            <h3>Requisições por Status</h3>
+            <div class="chart-container">
+                <canvas id="statusChart"></canvas>
+            </div>
+        </div>
+        <div class="content-box">
+            <h3>Uso de Recursos do Sistema</h3>
+            <div class="chart-container">
+                <canvas id="systemUsageChart"></canvas>
+            </div>
+        </div>
+        <div class="content-box">
+            <h3>Acessos Recentes</h3>
+            <div class="chart-container">
+                <canvas id="accessTrendChart"></canvas>
+            </div>
+        </div>
+        <div class="content-box">
+            <h3>Segurança</h3>
+            <div class="chart-container">
+                <canvas id="securityChart"></canvas>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const ctxStatus = document.getElementById('statusChart').getContext('2d');
+            const ctxSystem = document.getElementById('systemUsageChart').getContext('2d');
+            const ctxAccess = document.getElementById('accessTrendChart').getContext('2d');
+            const ctxSecurity = document.getElementById('securityChart').getContext('2d');
+
+            // --- Gráfico de Status das Requisições ---
+            const statusData = {{ status_counts|tojson }};
+            new Chart(ctxStatus, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(statusData),
+                    datasets: [{
+                        label: 'Requisições',
+                        data: Object.values(statusData),
+                        backgroundColor: [
+                            'rgba(75, 192, 192, 0.7)', // Sucesso (2xx)
+                            'rgba(255, 206, 86, 0.7)', // Redirecionamento (3xx)
+                            'rgba(255, 99, 132, 0.7)', // Erro do Cliente (4xx)
+                            'rgba(153, 102, 255, 0.7)'  // Erro do Servidor (5xx)
+                        ]
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // --- Gráfico de Segurança ---
+            const securityData = {{ security_counts|tojson }};
+            new Chart(ctxSecurity, {
+                type: 'bar',
+                data: {
+                    labels: ['IPs Bloqueados', 'Tentativas Falhas'],
+                    datasets: [{
+                        label: 'Contagem',
+                        data: [securityData.blocked, securityData.failed],
+                        backgroundColor: ['rgba(255, 99, 132, 0.7)', 'rgba(255, 159, 64, 0.7)']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y' }
+            });
+
+            // --- Gráfico de Uso do Sistema (CPU/RAM) ---
+            const systemUsageChart = new Chart(ctxSystem, {
+                type: 'bar',
+                data: {
+                    labels: ['CPU (%)', 'Memória (%)'],
+                    datasets: [{
+                        label: 'Uso Atual',
+                        data: [0, 0], // Inicia com 0
+                        backgroundColor: ['rgba(54, 162, 235, 0.7)', 'rgba(75, 192, 192, 0.7)']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, max: 100 } }
+                }
+            });
+
+            // --- Gráfico de Tendência de Acesso ---
+            const accessTrendData = {{ access_trend|tojson }};
+            new Chart(ctxAccess, {
+                type: 'line',
+                data: {
+                    labels: Object.keys(accessTrendData),
+                    datasets: [{
+                        label: 'Requisições nos Últimos Minutos',
+                        data: Object.values(accessTrendData),
+                        borderColor: 'rgba(153, 102, 255, 1)',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // Função para atualizar os dados de uso do sistema
+            async function fetchSystemUsage() {
+                try {
+                    const response = await fetch('/api/system_stats');
+                    const data = await response.json();
+                    systemUsageChart.data.datasets[0].data = [data.cpu, data.memory];
+                    systemUsageChart.update();
+                } catch (error) {
+                    console.error('Erro ao buscar dados do sistema:', error);
+                }
+            }
+
+            // Atualiza os dados do sistema a cada 5 segundos
+            setInterval(fetchSystemUsage, 5000);
+            fetchSystemUsage(); // Chama uma vez no início
+        });
+    </script>
+{% endblock %}

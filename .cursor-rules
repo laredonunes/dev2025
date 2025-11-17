@@ -1,0 +1,42 @@
+# Regras Gerais para a IA neste Projeto
+
+Este arquivo contém as diretrizes essenciais para o desenvolvimento e manutenção deste projeto. Siga estas regras para garantir consistência, segurança e qualidade.
+
+## 1. Visão Geral da Arquitetura
+
+O projeto é um **Gateway de API seguro** construído com **Flask**. Ele possui três componentes principais:
+
+1.  **API Backend (`/api/*`)**: Rotas que expõem a lógica de negócio e são protegidas por mecanismos de segurança.
+2.  **Painel de Administração (`/login`, `/monitoring`)**: Uma interface web dinâmica renderizada com Jinja2 (a partir da pasta `templates`) para gerenciamento e monitoramento.
+3.  **Site Estático (`/site/*`)**: Um conjunto de páginas HTML/CSS/JS servidas diretamente (a partir da pasta `site`), sem envolvimento do motor de templates do Flask.
+
+## 2. Princípios de Segurança (MUITO IMPORTANTE)
+
+A segurança é o pilar deste projeto.
+
+-   **NUNCA use f-strings ou concatenação de strings para construir consultas SQL.** Todas as interações com o banco de dados `sqlite3` **DEVEM** usar consultas parametrizadas (`?`) para prevenir SQL Injection.
+    -   **Correto:** `db.execute("SELECT * FROM user WHERE username = ?", (username,))`
+    -   **Incorreto:** `db.execute(f"SELECT * FROM user WHERE username = '{username}'")`
+
+-   **Hashing de Senhas**: O objetivo é **não** armazenar senhas em texto plano. Ao manipular senhas, use `werkzeug.security.generate_password_hash` para armazenar e `check_password_hash` para verificar.
+
+-   **Mecanismo de Bloqueio**: A lógica de bloqueio de IP (`failed_attempts`, `blocked_ips`) é um recurso central. Entenda como ela funciona antes de modificar rotas de autenticação.
+
+-   **Flag `SECURITY_ENABLED`**: Respeite esta flag em `app.config`. Qualquer novo recurso de segurança deve ser condicional a ela.
+
+## 3. Interação com o Banco de Dados
+
+-   **ORM foi Removido**: O projeto usa a biblioteca `sqlite3` diretamente. **Não** reintroduza ORMs como SQLAlchemy sem autorização explícita.
+-   **Gerenciamento de Conexão**: Use as funções `get_db()` para obter a conexão e `@app.teardown_appcontext` para fechá-la. Não abra ou feche conexões manualmente dentro das rotas.
+
+## 4. Estrutura de Arquivos e Código
+
+-   **`app.py`**: É o coração da aplicação. Mantenha-o organizado, com funções bem definidas (ex: funções de DB, decorators de segurança, rotas).
+-   **`templates/` vs `site/`**: Entenda a diferença. `templates` é para páginas dinâmicas com Jinja2 (ex: painel de admin). `site` é para conteúdo estático que não deve ser processado pelo Flask.
+-   **`requirements.txt`**: Ao adicionar uma nova dependência, fixe a versão (`biblioteca==1.2.3`) e adicione-a ao arquivo.
+
+## 5. Estilo de Código e Convenções
+
+-   **Idioma**: Todos os novos comentários, docstrings e textos visíveis para o usuário devem ser escritos em **Português (Brasil)**.
+-   **Clareza**: Prefira código claro e legível a código excessivamente compacto. Use nomes de variáveis e funções descritivos.
+-   **Consistência**: Mantenha o estilo do código existente.

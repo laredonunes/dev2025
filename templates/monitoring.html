@@ -1,0 +1,96 @@
+{% extends "layout.html" %}
+
+{% block title %}Monitoramento{% endblock %}
+
+{% block content %}
+    <h2>Monitoramento de Segurança</h2>
+
+    <div class="dashboard-grid">
+        <!-- IPs Bloqueados -->
+        <div class="content-box">
+            <h3>IPs Atualmente Bloqueados</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>IP</th>
+                        <th>Expira em (s)</th>
+                        <th>Nível</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ip, info in blocked_ips.items() %}
+                    <tr>
+                        <td>{{ ip }}</td>
+                        <td>
+                            {% if info.block_until == float('inf') %}
+                                Permanente
+                            {% else %}
+                                {{ (info.block_until - time.time()) | int }}
+                            {% endif %}
+                        </td>
+                        <td>{{ info.level }}</td>
+                        <td><a href="{{ url_for('unblock_ip', ip=ip) }}" class="unblock-btn">Desbloquear</a></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4">Nenhum IP bloqueado.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Tentativas Falhas -->
+        <div class="content-box">
+            <h3>Tentativas de Login Falhas</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>IP</th>
+                        <th>Tentativas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ip, info in failed_attempts.items() %}
+                    <tr>
+                        <td>{{ ip }}</td>
+                        <td>{{ info.count }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="2">Nenhuma tentativa falha registrada.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Log de Requisições -->
+    <div class="content-box" style="margin-top: 20px;">
+        <h3>Log de Requisições Recentes</h3>
+        <div style="max-height: 400px; overflow-y: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>IP</th>
+                        <th>DNS</th>
+                        <th>Rota</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in request_log %}
+                    <tr>
+                        <td>{{ log.timestamp }}</td>
+                        <td>{{ log.ip }}</td>
+                        <td>{{ log.dns }}</td>
+                        <td>{{ log.path }}</td>
+                        <td>{{ log.status_code }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5">Nenhum log de requisição.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

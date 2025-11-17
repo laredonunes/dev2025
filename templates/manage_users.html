@@ -1,0 +1,93 @@
+{% extends "layout.html" %}
+
+{% block title %}Gerenciar Usuários{% endblock %}
+
+{% block content %}
+    <h2>Gerenciamento de Usuários</h2>
+
+    <div class="dashboard-grid">
+        <!-- Lista de Usuários -->
+        <div class="content-box">
+            <h3>Usuários Cadastrados</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nome de Usuário</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>{{ user.username }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="2">Nenhum usuário encontrado.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Adicionar Novo Usuário -->
+        <div class="content-box">
+            <h3>Adicionar Novo Usuário</h3>
+            <form id="add-user-form">
+                <div class="form-group">
+                    <label for="username">Nome de Usuário</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Senha</fabel>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Adicionar Usuário</button>
+            </form>
+            <div id="form-message" style="margin-top: 15px;"></div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('add-user-form').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    
+    const form = event.target;
+    const username = form.username.value;
+    const password = form.password.value;
+    const messageDiv = document.getElementById('form-message');
+
+    try {
+        const response = await fetch('/api/users', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, password })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            messageDiv.style.color = 'green';
+            messageDiv.textContent = result.message;
+            // Recarrega a página para atualizar a lista de usuários
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            messageDiv.style.color = 'red';
+            messageDiv.textContent = 'Erro: ' + result.error;
+        }
+    } catch (error) {
+        messageDiv.style.color = 'red';
+        messageDiv.textContent = 'Erro de conexão ao adicionar usuário.';
+    }
+});
+</script>
+<style>
+    .form-group { margin-bottom: 1rem; }
+    input[type="text"], input[type="password"] { width: 100%; padding: 8px; box-sizing: border-box; }
+    .btn { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; }
+    .btn-primary { background-color: var(--primary-color); color: #000; font-weight: bold; }
+</style>
+{% endblock %}

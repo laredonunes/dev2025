@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Painel{% endblock %} - API Gateway</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body class="light-theme">
+
+    <div class="sidebar light-theme" id="sidebar">
+        <div class="sidebar-header">
+            <span class="logo">Painel</span>
+        </div>
+        <ul class="sidebar-menu">
+            <li><a href="{{ url_for('dashboard') }}"><span class="icon">📊</span><span class="text">Dashboard</span></a></li>
+            <li><a href="{{ url_for('monitoring') }}"><span class="icon">👁️</span><span class="text">Monitoramento</span></a></li>
+            <li><a href="{{ url_for('manage_users_page') }}"><span class="icon">👥</span><span class="text">Usuários</span></a></li>
+        </ul>
+    </div>
+
+    <div class="main-content">
+        <div class="page-header">
+            <div class="sidebar-toggle" id="sidebar-toggle">☰</div>
+            <div class="theme-switcher" id="theme-switcher">🌙</div>
+        </div>
+        
+        {% block content %}{% endblock %}
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebar-toggle');
+            const themeSwitcher = document.getElementById('theme-switcher');
+            const body = document.body;
+
+            const elementsToTheme = [
+                body,
+                sidebar,
+                ...document.querySelectorAll('.content-box')
+            ];
+
+            function setTheme(theme) {
+                elementsToTheme.forEach(el => {
+                    if(el) {
+                        el.classList.remove('light-theme', 'dark-theme');
+                        el.classList.add(theme + '-theme');
+                    }
+                });
+                themeSwitcher.textContent = theme === 'dark' ? '☀️' : '🌙';
+                localStorage.setItem('theme', theme);
+            }
+
+            sidebarToggle.addEventListener('click', () => {
+                sidebar.classList.toggle('collapsed');
+                localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+            });
+
+            themeSwitcher.addEventListener('click', () => {
+                const currentTheme = localStorage.getItem('theme') || 'light';
+                const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+                setTheme(newTheme);
+            });
+
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            const sidebarCollapsed = localStorage.getItem('sidebar_collapsed') === 'true';
+
+            setTheme(savedTheme);
+            if (sidebarCollapsed) {
+                sidebar.classList.add('collapsed');
+            }
+        });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
