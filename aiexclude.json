@@ -1,0 +1,18 @@
+{
+  "common": {
+    "exclude": [
+      "**/.*",
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**"
+    ]
+  },
+  "languages": {
+    "python": {
+      "exclude": [
+        "**/venv/**",
+        "**/__pycache__/**"
+      ]
+    }
+  }
+}
