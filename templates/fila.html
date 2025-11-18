@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+
+{% block title %}Status da Fila{% endblock %}
+
+{% block content %}
+    <h2>Status das Filas de Tarefas</h2>
+
+    {% if queue_data.error %}
+        <div class="content-box">
+            <p class="alert-error">Não foi possível conectar ao Redis para buscar as filas: {{ queue_data.error }}</p>
+        </div>
+    {% else %}
+        {% for queue_name, tasks in queue_data.items() %}
+        <div class="content-box" style="margin-top: 20px;">
+            <h3>Fila: <code>{{ queue_name }}</code> ({{ tasks|length }} itens)</h3>
+            {% if tasks %}
+            <ul>
+                {% for task in tasks %}
+                <li>ID da Tarefa: <code>{{ task.task_id }}</code></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p>A fila está vazia.</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% endif %}
+{% endblock %}

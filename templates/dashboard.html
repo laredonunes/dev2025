@@ -29,6 +29,29 @@
                 <canvas id="securityChart"></canvas>
             </div>
         </div>
+        <div class="content-box">
+            <h3>Agentes Mais Requisitados</h3>
+            <div class="chart-container">
+                <canvas id="agentRankingChart"></canvas>
+            </div>
+        </div>
+        <div class="content-box">
+            <h3>Tarefas Mais Lentas (Top 5)</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr><th>ID da Tarefa</th><th>Tempo (s)</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for task_id, time in slowest_tasks.items() %}
+                        <tr><td><code>{{ task_id[:12] }}...</code></td><td>{{ time }}</td></tr>
+                    {% else %}
+                        <tr><td colspan="2">Nenhum dado de execução.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 {% endblock %}
 
@@ -40,6 +63,7 @@
             const ctxSystem = document.getElementById('systemUsageChart').getContext('2d');
             const ctxAccess = document.getElementById('accessTrendChart').getContext('2d');
             const ctxSecurity = document.getElementById('securityChart').getContext('2d');
+            const ctxAgentRanking = document.getElementById('agentRankingChart').getContext('2d');
 
             // --- Gráfico de Status das Requisições ---
             const statusData = {{ status_counts|tojson }};
@@ -106,6 +130,27 @@
                         borderColor: 'rgba(153, 102, 255, 1)',
                         tension: 0.1,
                         fill: false
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // --- Gráfico de Ranking de Agentes ---
+            const agentRankingData = {{ agent_ranking|tojson }};
+            new Chart(ctxAgentRanking, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(agentRankingData),
+                    datasets: [{
+                        label: 'Requisições',
+                        data: Object.values(agentRankingData),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.7)',
+                            'rgba(54, 162, 235, 0.7)',
+                            'rgba(255, 206, 86, 0.7)',
+                            'rgba(75, 192, 192, 0.7)',
+                            'rgba(153, 102, 255, 0.7)'
+                        ]
                     }]
                 },
                 options: { responsive: true, maintainAspectRatio: false }

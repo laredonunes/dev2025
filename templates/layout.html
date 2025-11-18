@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Painel{% endblock %} - API Gateway</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .sidebar-menu .logout-link {
+            margin-top: auto; /* Empurra o link de logout para o final */
+        }
+        /* Melhora a UX indicando elementos clicáveis */
+        .sidebar-toggle, .theme-switcher, .sidebar-menu a {
+            cursor: pointer;
+        }
+    </style>
     {% block head %}{% endblock %}
 </head>
 <body class="light-theme">
@@ -13,10 +22,15 @@
         <div class="sidebar-header">
             <span class="logo">Painel</span>
         </div>
-        <ul class="sidebar-menu">
-            <li><a href="{{ url_for('dashboard') }}"><span class="icon">📊</span><span class="text">Dashboard</span></a></li>
-            <li><a href="{{ url_for('monitoring') }}"><span class="icon">👁️</span><span class="text">Monitoramento</span></a></li>
-            <li><a href="{{ url_for('manage_users_page') }}"><span class="icon">👥</span><span class="text">Usuários</span></a></li>
+        <ul class="sidebar-menu" style="display: flex; flex-direction: column; height: calc(100% - 70px);">
+            <div>
+                <li><a href="{{ url_for('dashboard') }}"><span class="icon">📊</span><span class="text">Dashboard</span></a></li>
+                <li><a href="{{ url_for('monitoring') }}"><span class="icon">👁️</span><span class="text">Monitoramento</span></a></li>
+                <li><a href="{{ url_for('queue_status_page') }}"><span class="icon">⏳</span><span class="text">Fila</span></a></li>
+                <li><a href="{{ url_for('agents_page') }}"><span class="icon">🤖</span><span class="text">Agentes</span></a></li>
+                <li><a href="{{ url_for('manage_users_page') }}"><span class="icon">👥</span><span class="text">Usuários</span></a></li>
+            </div>
+            <li class="logout-link"><a href="{{ url_for('logout') }}"><span class="icon">🚪</span><span class="text">Sair</span></a></li>
         </ul>
     </div>
 

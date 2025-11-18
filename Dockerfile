@@ -1,20 +1,20 @@
-# Use an official Python runtime as a parent image
-FROM python:3.8-slim
+# Use uma imagem base oficial do Python
+FROM python:3.11-slim
 
-# Set the working directory to /app
+# Define o diretório de trabalho dentro do contêiner
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
-COPY . /app
+# Impede que o Python gere arquivos .pyc
+ENV PYTHONDONTWRITEBYTECODE 1
+# Garante que a saída do Python seja exibida imediatamente no terminal do contêiner
+ENV PYTHONUNBUFFERED 1
 
-# Install any needed packages specified in requirements.txt
+# Copia o arquivo de dependências e instala
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Make port 5000 available to the world outside this container
+# Copia o restante do código da aplicação para o diretório de trabalho
+COPY . .
+
+# A porta que a aplicação Flask irá expor
 EXPOSE 5000
-
-# Define environment variable
-ENV NAME World
-
-# Run app.py when the container launches
-CMD ["python", "app.py"]

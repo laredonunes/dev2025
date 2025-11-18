@@ -20,15 +20,9 @@
                 </thead>
                 <tbody>
                     {% for ip, info in blocked_ips.items() %}
-                    <tr>
+                    <tr class="{% if info.expires_in < 60 %}expiring-soon{% endif %}">
                         <td>{{ ip }}</td>
-                        <td>
-                            {% if info.block_until == float('inf') %}
-                                Permanente
-                            {% else %}
-                                {{ (info.block_until - time.time()) | int }}
-                            {% endif %}
-                        </td>
+                        <td>{{ info.expires_in }}</td>
                         <td>{{ info.level }}</td>
                         <td><a href="{{ url_for('unblock_ip', ip=ip) }}" class="unblock-btn">Desbloquear</a></td>
                     </tr>
@@ -93,4 +87,10 @@
             </table>
         </div>
     </div>
+<style>
+    .unblock-btn { color: var(--accent-color); text-decoration: none; }
+    .unblock-btn { cursor: pointer; }
+    .unblock-btn:hover { text-decoration: underline; }
+    .expiring-soon td { color: orange; }
+</style>
 {% endblock %}

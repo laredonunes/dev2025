@@ -5,89 +5,134 @@
 {% block content %}
     <h2>Gerenciamento de Usuários</h2>
 
-    <div class="dashboard-grid">
-        <!-- Lista de Usuários -->
-        <div class="content-box">
-            <h3>Usuários Cadastrados</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Nome de Usuário</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for user in users %}
-                    <tr>
-                        <td>{{ user.id }}</td>
-                        <td>{{ user.username }}</td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="2">Nenhum usuário encontrado.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+    <!-- Formulário para criar usuário -->
+    <div class="content-box">
+        <h3>Adicionar Novo Usuário</h3>
+        <form id="add-user-form">
+            <div class="form-group">
+                <label for="new-username">Nome de Usuário</label>
+                <input type="text" id="new-username" name="username" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Adicionar Usuário</button>
+        </form>
+        <div id="add-user-message" style="margin-top: 1rem;"></div>
+    </div>
 
-        <!-- Adicionar Novo Usuário -->
-        <div class="content-box">
-            <h3>Adicionar Novo Usuário</h3>
-            <form id="add-user-form">
-                <div class="form-group">
-                    <label for="username">Nome de Usuário</label>
-                    <input type="text" id="username" name="username" required>
-                </div>
-                <div class="form-group">
-                    <label for="password">Senha</fabel>
-                    <input type="password" id="password" name="password" required>
-                </div>
-                <button type="submit" class="btn btn-primary">Adicionar Usuário</button>
-            </form>
-            <div id="form-message" style="margin-top: 15px;"></div>
+    <!-- Tabela de usuários existentes -->
+    <div class="content-box" style="margin-top: 20px;">
+        <h3>Usuários Existentes</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nome de Usuário</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.username }}</td>
+                    <td class="actions-cell">
+                        <button class="btn btn-secondary btn-sm reset-password-btn" data-user-id="{{ user.id }}" data-username="{{ user.username }}">Resetar Senha</button>
+                        <button class="btn btn-danger btn-sm delete-user-btn" data-user-id="{{ user.id }}">Excluir</button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3">Nenhum usuário encontrado.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Modal para exibir senha temporária -->
+    <div id="password-modal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h3 id="modal-title">Usuário Criado com Sucesso!</h3>
+            <p>A senha temporária para o usuário <strong><span id="modal-username"></span></strong> é:</p>
+            <p class="modal-password-display"><code><span id="modal-password"></span></code></p>
+            <p class="alert-warning">Por favor, anote e informe esta senha ao usuário. Ele será obrigado a trocá-la no primeiro login.</p>
         </div>
     </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-document.getElementById('add-user-form').addEventListener('submit', async function(event) {
-    event.preventDefault();
-    
-    const form = event.target;
-    const username = form.username.value;
-    const password = form.password.value;
-    const messageDiv = document.getElementById('form-message');
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('add-user-form');
+    const messageDiv = document.getElementById('add-user-message');
+    const modal = document.getElementById('password-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalClose = document.querySelector('.modal-close');
 
-    try {
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('new-username').value.trim();
+        if (!username) return;
+
         const response = await fetch('/api/users', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ username, password })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username })
         });
-
         const result = await response.json();
 
-        if (response.ok) {
-            messageDiv.style.color = 'green';
-            messageDiv.textContent = result.message;
-            // Recarrega a página para atualizar a lista de usuários
-            setTimeout(() => window.location.reload(), 1500);
+        if (response.ok && result.success) {
+            modalTitle.textContent = 'Usuário Criado com Sucesso!';
+            document.getElementById('modal-username').textContent = username;
+            document.getElementById('modal-password').textContent = result.temporary_password;
+            modal.style.display = 'block';
+            form.reset();
         } else {
+            messageDiv.textContent = result.error || 'Erro ao criar usuário.';
             messageDiv.style.color = 'red';
-            messageDiv.textContent = 'Erro: ' + result.error;
         }
-    } catch (error) {
-        messageDiv.style.color = 'red';
-        messageDiv.textContent = 'Erro de conexão ao adicionar usuário.';
-    }
+    });
+
+    document.querySelectorAll('.delete-user-btn').forEach(button => {
+        button.addEventListener('click', async (e) => {
+            const userId = e.target.dataset.userId;
+            if (confirm('Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.')) {
+                const response = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    alert(result.message);
+                    location.reload();
+                } else {
+                    alert(`Erro: ${result.error}`);
+                }
+            }
+        });
+    });
+
+    document.querySelectorAll('.reset-password-btn').forEach(button => {
+        button.addEventListener('click', async (e) => {
+            const userId = e.target.dataset.userId;
+            const username = e.target.dataset.username;
+            if (confirm(`Tem certeza que deseja resetar a senha para o usuário "${username}"?`)) {
+                const response = await fetch(`/api/users/${userId}/reset-password`, { method: 'POST' });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    modalTitle.textContent = 'Senha Resetada com Sucesso!';
+                    document.getElementById('modal-username').textContent = username;
+                    document.getElementById('modal-password').textContent = result.temporary_password;
+                    modal.style.display = 'block';
+                } else {
+                    alert(`Erro: ${result.error}`);
+                }
+            }
+        });
+    });
+
+    modalClose.onclick = () => { modal.style.display = 'none'; location.reload(); };
+    window.onclick = (event) => {
+        if (event.target == modal) {
+            modal.style.display = 'none';
+            location.reload();
+        }
+    };
 });
 </script>
-<style>
-    .form-group { margin-bottom: 1rem; }
-    input[type="text"], input[type="password"] { width: 100%; padding: 8px; box-sizing: border-box; }
-    .btn { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; }
-    .btn-primary { background-color: var(--primary-color); color: #000; font-weight: bold; }
-</style>
 {% endblock %}

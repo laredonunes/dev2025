@@ -5,15 +5,27 @@ from flask import (
 from functools import wraps
 import os
 import time
-from collections import deque
+import secrets
+import string
+from collections import deque, Counter
 import socket
 import sqlite3
 import psutil
+import redis
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# --- Inicialização e Configuração ---
-load_dotenv() # Carrega variáveis do .env
+# Importa o Blueprint dos agentes
+from agents import agents
+from celery_utils import make_celery
+from biblioteca_fila import get_queue_info
+
+# Import local para evitar dependência circular no topo
+from database import (
+    init_db, migrate_db, get_user_by_username, get_all_users, delete_user_by_id, get_db, init_app as init_db_app
+)
+
+load_dotenv() 
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config['SECURITY_ENABLED'] = True
@@ -21,79 +33,98 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback-secret-key')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE = os.path.join(BASE_DIR, 'app.db')
 
-#-----------------------------------------------------------------------
-# BLOCO DO BANCO DE DADOS
-#-----------------------------------------------------------------------
-def get_db():
-    if 'db' not in g:
-        g.db = sqlite3.connect(DATABASE)
-        g.db.row_factory = sqlite3.Row
-    return g.db
-
-@app.teardown_appcontext
-def close_db(exception):
-    db = g.pop('db', None)
-    if db is not None:
-        db.close()
-
-def init_db():
-    db = get_db()
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS user (
-            id INTEGER PRIMARY KEY,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            password_reset_required BOOLEAN DEFAULT TRUE
-        )
-    """)
-    db.commit()
-
-def get_user_by_username(username: str):
-    return get_db().execute("SELECT * FROM user WHERE username = ?", (username,)).fetchone()
-
-def get_all_users():
-    return get_db().execute("SELECT id, username FROM user").fetchall()
-
-def create_admin_user_if_not_exists():
-    admin_user = os.getenv('DEFAULT_ADMIN_USER', 'admin')
-    if get_user_by_username(admin_user) is None:
-        admin_pass = os.getenv('DEFAULT_ADMIN_PASSWORD', 'changeme')
-        hashed_password = generate_password_hash(admin_pass)
-        get_db().execute(
-            "INSERT INTO user (username, password, password_reset_required) VALUES (?, ?, ?)",
-            (admin_user, hashed_password, True)
-        )
-        get_db().commit()
 
 #-----------------------------------------------------------------------
-# BLOCO DE SEGURANÇA E DECORATORS
+# BLOCO DE CONFIGURAÇÃO DO CELERY
 #-----------------------------------------------------------------------
-failed_attempts = {}
-blocked_ips = {}
+# Lê a porta do Redis da variável de ambiente, com '16379' como padrão.
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = os.getenv('REDIS_PORT', '16379')
+
+app.config.update(
+    CELERY_BROKER_URL=f'redis://{REDIS_HOST}:{REDIS_PORT}/0',
+    CELERY_RESULT_BACKEND=f'redis://{REDIS_HOST}:{REDIS_PORT}/0'
+)
+celery = make_celery(app)
+
+# Inicializa o módulo de banco de dados com a aplicação
+init_db_app(app)
+
+# Anexa a conexão com o Redis ao app para ser usada em toda a aplicação
+app.redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=1, decode_responses=True)
+
+# Constantes de Segurança
+FAILED_ATTEMPT_WINDOW = 300  # 5 minutos em segundos
+MAX_FAILED_ATTEMPTS = 5
+# Lê o cooldown da API do agente do .env, com 15s como padrão.
+app.config['AGENT_API_COOLDOWN_SECONDS'] = int(os.getenv('AGENT_API_COOLDOWN_SECONDS', '15'))
+
+#-----------------------------------------------------------------------
+# BLOCO DE DECORATORS E FUNÇÕES DE SEGURANÇA
+#-----------------------------------------------------------------------
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'logged_in' not in session:
+            return redirect(url_for('login_page'))
+        if session.get('password_reset_required', False) and request.endpoint not in ['change_password_page', 'static', 'logout']:
+            return redirect(url_for('change_password_page'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Aplica o decorator de login a todas as rotas do Blueprint de agentes
+agents.agents_bp.before_request(login_required)
+
+# Registra o Blueprint na aplicação principal
+app.register_blueprint(agents.agents_bp)
+
+#-----------------------------------------------------------------------
+# BLOCO DE SEGURANÇA (LOGS, BLOQUEIO, ETC.)
+#-----------------------------------------------------------------------
 request_log = deque(maxlen=100)
-BLOCK_DURATIONS = [3600]
+BLOCK_DURATIONS = [3600] # 1 hora para o primeiro bloqueio
 
 def get_remote_address():
     return request.headers.get('X-Forwarded-For', request.remote_addr or '0.0.0.0').split(',')[0].strip()
 
 @app.after_request
 def log_request(response):
-    # ... (código do log_request mantido)
+    ip = get_remote_address()
+    try:
+        dns = socket.gethostbyaddr(ip)[0]
+    except (socket.herror, socket.gaierror):
+        dns = "N/A"
+    request_log.appendleft({
+        "ip": ip, "dns": dns, "path": request.path,
+        "status_code": response.status_code, "timestamp": int(time.time())
+    })
     return response
 
 def security_check(f):
-    # ... (código do security_check mantido)
-    return f
-
-def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'logged_in' not in session:
-            return redirect(url_for('login_page'))
-        if session.get('password_reset_required', False):
-            return redirect(url_for('change_password_page'))
+        ip = get_remote_address()
+        if app.redis_client.exists(f"blocked:{ip}"):
+            return jsonify({"error": "IP temporariamente bloqueado."}), 429
         return f(*args, **kwargs)
     return decorated_function
+
+def record_failed_attempt(ip):
+    """Registra uma tentativa de login falha no Redis."""
+    key = f"failed:{ip}"
+    # Adiciona a tentativa atual com um score de timestamp
+    now = int(time.time())
+    app.redis_client.zadd(key, {now: now})
+    # Remove tentativas antigas (fora da janela de 5 minutos)
+    app.redis_client.zremrangebyscore(key, '-inf', now - FAILED_ATTEMPT_WINDOW)
+    # Define um TTL para a chave, para que ela expire se não houver mais falhas
+    app.redis_client.expire(key, FAILED_ATTEMPT_WINDOW)
+    
+    # Se o número de tentativas exceder o limite, bloqueia o IP
+    if app.redis_client.zcard(key) >= MAX_FAILED_ATTEMPTS:
+        block_duration = BLOCK_DURATIONS[0]
+        app.redis_client.set(f"blocked:{ip}", 'level_1', ex=block_duration)
+        app.redis_client.delete(key) # Limpa as tentativas falhas após bloquear
 
 #-----------------------------------------------------------------------
 # ROTAS DE AUTENTICAÇÃO E GERENCIAMENTO DE USUÁRIOS
@@ -101,6 +132,12 @@ def login_required(f):
 @app.route('/login', methods=['GET'])
 def login_page():
     return render_template('login.html', error_modal=None)
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('Você saiu da sua conta.', 'success')
+    return redirect(url_for('login_page'))
 
 @app.route('/change-password', methods=['GET', 'POST'])
 def change_password_page():
@@ -112,12 +149,13 @@ def change_password_page():
         confirm_password = request.form.get('confirm_password')
 
         if not new_password or new_password != confirm_password:
-            flash('As senhas não conferem ou estão vazias.', 'error')
-            return render_template('change_password.html')
+            flash('As senhas não conferem ou estão em branco.', 'danger')
+            return redirect(url_for('change_password_page'))
 
         hashed_password = generate_password_hash(new_password)
         db = get_db()
-        db.execute("UPDATE user SET password = ?, password_reset_required = FALSE WHERE id = ?", (hashed_password, session['user_id']))
+        db.execute("UPDATE user SET password = ?, password_reset_required = ? WHERE id = ?",
+                   (hashed_password, False, session['user_id']))
         db.commit()
 
         session['password_reset_required'] = False
@@ -133,73 +171,244 @@ def manage_users_page():
     return render_template('manage_users.html', users=users)
 
 #-----------------------------------------------------------------------
-# ROTAS DA API
+# ROTAS DA API PRINCIPAL
 #-----------------------------------------------------------------------
 @app.route('/api/login', methods=['POST'])
 @security_check
 def api_login():
-    username = request.form.get('username')
-    password = request.form.get('password')
+    ip = get_remote_address()
+
+    # Torna a rota mais robusta, aceitando JSON ou dados de formulário
+    if request.is_json:
+        data = request.get_json()
+    else:
+        data = request.form
+
+    username = data.get('username')
+    password = data.get('password')
+
     if not username or not password:
-        return jsonify({"error": "Nome de usuário e senha são obrigatórios."}), 400
+        return jsonify({"error": "Usuário e senha são obrigatórios."}), 400
 
     user = get_user_by_username(username)
+
     if user and check_password_hash(user['password'], password):
+        app.redis_client.delete(f"failed:{ip}") # Limpa o contador de falhas em caso de sucesso
+        
+        session.clear()
         session['logged_in'] = True
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['password_reset_required'] = user['password_reset_required']
         
-        if get_remote_address() in failed_attempts:
-            del failed_attempts[get_remote_address()]
-
-        if user['password_reset_required']:
-            return jsonify({"success": True, "redirect_url": url_for('change_password_page')})
-        else:
-            return jsonify({"success": True, "redirect_url": url_for('dashboard')})
+        redirect_url = url_for('change_password_page') if user['password_reset_required'] else url_for('dashboard')
+        return jsonify({"success": True, "redirect_url": redirect_url})
     else:
-        # ... (código do record_failed_attempt mantido)
-        return jsonify({"success": False, "error": "Credenciais inválidas."}), 401
+        record_failed_attempt(ip)
+        return jsonify({"error": "Credenciais inválidas."}), 401
 
 @app.route('/api/users', methods=['POST'])
 @login_required
 def add_user():
     data = request.get_json()
     username = data.get('username')
-    password = data.get('password')
 
-    if not username or not password:
-        return jsonify({"error": "Usuário e senha são obrigatórios."}), 400
-    
-    if get_user_by_username(username):
+    if not username:
+        return jsonify({"error": "Nome de usuário é obrigatório."}), 400
+
+    if get_user_by_username(username) is not None:
         return jsonify({"error": "Este nome de usuário já existe."}), 409
 
-    hashed_password = generate_password_hash(password)
-    db = get_db()
-    db.execute("INSERT INTO user (username, password, password_reset_required) VALUES (?, ?, ?)", (username, hashed_password, False))
-    db.commit()
-    
-    return jsonify({"success": True, "message": f"Usuário '{username}' criado com sucesso."}), 201
+    # Gera uma senha temporária forte e aleatória
+    alphabet = string.ascii_letters + string.digits
+    temporary_password = ''.join(secrets.choice(alphabet) for _ in range(12))
+    hashed_password = generate_password_hash(temporary_password)
 
-# ... (outras rotas da API e do app mantidas)
+    db = get_db()
+    db.execute(
+        "INSERT INTO user (username, password, password_reset_required) VALUES (?, ?, ?)",
+        (username, hashed_password, True)
+    )
+    db.commit()
+    return jsonify({
+        "success": True,
+        "message": f"Usuário {username} criado com sucesso.",
+        "temporary_password": temporary_password
+    }), 201
+
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+@login_required
+def delete_user(user_id):
+    """Deleta um usuário."""
+    # Impede que o usuário logado se delete
+    if 'user_id' in session and session['user_id'] == user_id:
+        return jsonify({"error": "Você não pode excluir sua própria conta."}), 403
+
+    delete_user_by_id(user_id)
+    return jsonify({"success": True, "message": "Usuário excluído com sucesso."})
+
+@app.route('/api/users/<int:user_id>/reset-password', methods=['POST'])
+@login_required
+def reset_user_password(user_id):
+    """Reseta a senha de um usuário para uma nova senha temporária."""
+    # Gera uma nova senha temporária forte e aleatória
+    alphabet = string.ascii_letters + string.digits
+    temporary_password = ''.join(secrets.choice(alphabet) for _ in range(12))
+    hashed_password = generate_password_hash(temporary_password)
+
+    db = get_db()
+    db.execute(
+        "UPDATE user SET password = ?, password_reset_required = ? WHERE id = ?",
+        (hashed_password, True, user_id)
+    )
+    db.commit()
+
+    return jsonify({
+        "success": True,
+        "message": "Senha resetada com sucesso.",
+        "temporary_password": temporary_password
+    })
+
+@app.route('/api/system_stats')
+@login_required
+def system_stats():
+    return jsonify({
+        'cpu': psutil.cpu_percent(interval=None),
+        'memory': psutil.virtual_memory().percent
+    })
+
 #-----------------------------------------------------------------------
 # ROTAS DO PAINEL
 #-----------------------------------------------------------------------
+@app.route('/')
+def index():
+    return redirect(url_for('login_page'))
+
+def create_admin_user_if_not_exists():
+    """Cria o usuário administrador padrão se ele não existir."""
+    admin_username = os.getenv('DEFAULT_ADMIN_USER', 'admin')
+    if get_user_by_username(admin_username) is None:
+        admin_password = os.getenv('DEFAULT_ADMIN_PASSWORD', 'changeme')
+        hashed_password = generate_password_hash(admin_password)
+        db = get_db()
+        db.execute("INSERT INTO user (username, password, password_reset_required) VALUES (?, ?, ?)", (admin_username, hashed_password, True))
+        db.commit()
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    # ... (código do dashboard mantido)
-    pass
+    # --- Coleta de dados para os gráficos ---
+    
+    # 1. Contagem de status das requisições
+    status_codes = [log['status_code'] for log in request_log]
+    status_counts = {
+        '2xx': len([s for s in status_codes if 200 <= s < 300]),
+        '3xx': len([s for s in status_codes if 300 <= s < 400]),
+        '4xx': len([s for s in status_codes if 400 <= s < 500]),
+        '5xx': len([s for s in status_codes if 500 <= s < 600]),
+    }
+
+    # 2. Contagem de segurança
+    blocked_count = len(app.redis_client.keys("blocked:*"))
+    failed_count = len(app.redis_client.keys("failed:*"))
+    security_counts = {"blocked": blocked_count, "failed": failed_count}
+
+    # 3. Tendência de acessos (requisições por minuto nos últimos 5 minutos)
+    now = int(time.time())
+    access_trend = Counter()
+    for i in range(5):
+        minute_start = now - (i * 60)
+        minute_label = time.strftime('%H:%M', time.localtime(minute_start))
+        count = sum(1 for log in request_log if minute_start - 60 < log['timestamp'] <= minute_start)
+        access_trend[minute_label] = count
+
+    # 4. Ranking de agentes mais requisitados (Top 5)
+    agent_ranking_raw = app.redis_client.zrevrange('agent_requests:ranking', 0, 4, withscores=True)
+    agent_ranking = {agent.decode('utf-8'): int(score) for agent, score in agent_ranking_raw}
+
+    # 5. Tarefas mais lentas (Top 5)
+    slowest_tasks_raw = app.redis_client.zrevrange('task_execution_time', 0, 4, withscores=True)
+    slowest_tasks = {task.decode('utf-8'): round(score, 2) for task, score in slowest_tasks_raw}
+
+    return render_template(
+        'dashboard.html',
+        status_counts=status_counts,
+        security_counts=security_counts,
+        access_trend=dict(reversed(access_trend.items())), # Ordena do mais antigo para o mais novo
+        agent_ranking=agent_ranking,
+        slowest_tasks=slowest_tasks
+    )
+
+@app.route('/queue-status')
+@login_required
+def queue_status_page():
+    """Renderiza a página de status da fila."""
+    queue_data = get_queue_info()
+    return render_template('fila.html', queue_data=queue_data)
 
 @app.route('/monitoring')
 @login_required
 def monitoring():
-    # ... (código do monitoring mantido)
-    pass
+    # Busca IPs bloqueados e suas informações no Redis
+    blocked_keys = app.redis_client.keys("blocked:*")
+    blocked_ips_data = {}
+    for key in blocked_keys:
+        ip = key.split(":")[1]
+        blocked_ips_data[ip] = {
+            "level": app.redis_client.get(key),
+            "expires_in": app.redis_client.ttl(key)
+        }
 
-# ... (resto do arquivo)
-if __name__ == '__main__':
+    # Busca tentativas falhas no Redis
+    failed_keys = app.redis_client.keys("failed:*")
+    failed_attempts_data = {key.split(":")[1]: {"count": app.redis_client.zcard(key)} for key in failed_keys}
+
+    return render_template('monitoring.html',
+                           request_log=list(request_log),
+                           blocked_ips=blocked_ips_data,
+                           failed_attempts=failed_attempts_data,
+                           time=time) # Passa o módulo time para o template
+
+@app.route('/monitoring/unblock/<ip>')
+@login_required
+def unblock_ip(ip):
+    app.redis_client.delete(f"blocked:{ip}")
+    return redirect(url_for('monitoring'))
+
+@app.route('/agents')
+@login_required
+def agents_page():
+    """Renderiza a página de interação com os agentes."""
+    return render_template('agents.html')
+
+#-----------------------------------------------------------------------
+# COMANDOS CLI PARA GERENCIAMENTO
+#-----------------------------------------------------------------------
+@app.cli.command("init-app")
+def init_app_command():
+    """Inicializa o banco de dados e os serviços externos."""
+    init_db()
     with app.app_context():
-        init_db()
+        migrate_db()
         create_admin_user_if_not_exists()
+        print("Banco de dados e usuário admin inicializados.")
+    
+    # Inicializa o modelo Gemini
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        agents.model = genai.GenerativeModel('gemini-pro')
+        print("API do Gemini configurada com sucesso.")
+    except Exception as e:
+        print(f"ERRO CRÍTICO: Falha ao configurar a API do Gemini: {e}")
+
+#-----------------------------------------------------------------------
+# ENTRADA PRINCIPAL DA APLICAÇÃO (PARA DESENVOLVIMENTO)
+#-----------------------------------------------------------------------
+if __name__ == '__main__':
+    # O comando 'flask run' já lida com o contexto da aplicação.
+    # Para rodar com 'python app.py', o contexto precisa ser explícito.
+    # Nota: O comando 'init-app' não será re-executado pelo reloader do modo debug.
+    with app.app_context():
+        init_app_command()
     app.run(host='0.0.0.0', port=5000, debug=True)
