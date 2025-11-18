@@ -1,6 +1,7 @@
 import google.generativeai as genai
 from flask import Blueprint, render_template, request, jsonify, current_app, url_for, session, redirect
 import os
+from lambda_1 import agente_geral
 from .tasks import process_agent_request
 from celery.result import AsyncResult
 from functools import wraps
@@ -39,10 +40,10 @@ def rate_limit_agent_api(f):
         # Pega o IP do cliente
         ip = request.headers.get('X-Forwarded-For', request.remote_addr or '0.0.0.0').split(',')[0].strip()
         cooldown = current_app.config.get('AGENT_API_COOLDOWN_SECONDS', 15)
-        
+
         # Cria uma chave única no Redis para o rate limit deste IP
         rate_limit_key = f"rate_limit:agent_api:{ip}"
-        
+
         # Tenta definir a chave. Se a chave já existir (nx=True), o comando falha.
         if not current_app.redis_client.set(rate_limit_key, 1, ex=cooldown, nx=True):
             ttl = current_app.redis_client.ttl(rate_limit_key)
@@ -58,19 +59,28 @@ def rate_limit_agent_api(f):
 @agents_bp.route('/api/agents/ask', methods=['POST'])
 @gemini_api_required
 def ask_agent():
-    """Recebe uma pergunta e retorna a resposta do Gemini."""
+    """
+    Recebe uma pergunta, invoca a lambda_1 'agente_geral' de forma síncrona
+    e retorna a resposta do Gemini. Útil para testes rápidos.
+    """
     data = request.get_json()
+    if not data:
+        return jsonify({"error": "Corpo da requisição deve ser um JSON válido."}), 400
+
     question = data.get('question')
+    system_prompt = data.get('system_prompt', 'Você é um assistente prestativo.')
 
     if not question:
         return jsonify({"error": "Nenhuma pergunta foi fornecida."}), 400
 
     try:
-        response = model.generate_content(question)
-        return jsonify({"answer": response.text})
+        # Monta o payload e chama a função 'executar' da lambda_1 diretamente
+        payload = {"question": question, "system_prompt": system_prompt}
+        answer = agente_geral.executar(payload)
+        return jsonify({"answer": answer})
     except Exception as e:
         # Log do erro no servidor para depuração
-        current_app.logger.error(f"Erro na API do Gemini: {e}")
+        current_app.logger.error(f"Erro na chamada síncrona do agente: {e}", exc_info=True)
         return jsonify({"error": "Ocorreu um erro ao processar sua pergunta."}), 500
 
 #-----------------------------------------------------------------------
@@ -88,18 +98,22 @@ def ask_agent_async():
 
     data = request.get_json()
     question = data.get('question')
+    # Recebe o nome do agente e o prompt do sistema do frontend
+    agent_name = data.get('agent_name', 'geral')
+    system_prompt = data.get('system_prompt', 'Você é um assistente prestativo.')
 
     if not question:
         return jsonify({"error": "Nenhuma pergunta foi fornecida."}), 400
 
     # Monta o dicionário/envelope da mensagem
     message = {
-        "agent_name": "geral",
+        "agent_name": agent_name,
         "payload": {
-            "question": question
+            "question": question,
+            "system_prompt": system_prompt
         },
         "metadata": {
-            "user_id": session.get('user_id'), # Assumindo que o user_id está na sessão
+            "user_id": "",
             "request_timestamp": datetime.now(timezone.utc).isoformat(),
             "trace_id": str(uuid.uuid4())
         }
@@ -111,6 +125,7 @@ def ask_agent_async():
 
     # Dispara a tarefa assíncrona
     task = process_agent_request.delay(message)
+    current_app.logger.info(f"Tarefa {task.id} enviada para a fila do Celery.")
 
     # Retorna o ID da tarefa e uma URL para consultar o status
     return jsonify({

@@ -1,6 +1,6 @@
 from flask import (
     Flask, send_from_directory, request, jsonify, render_template,
-    redirect, url_for, session, g, flash
+    redirect, url_for, session, g, flash, abort
 )
 from functools import wraps
 import os
@@ -18,6 +18,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # Importa o Blueprint dos agentes
 from agents import agents
 from celery_utils import make_celery
+from celery.signals import worker_ready
 from biblioteca_fila import get_queue_info
 
 # Import local para evitar dependência circular no topo
@@ -25,7 +26,7 @@ from database import (
     init_db, migrate_db, get_user_by_username, get_all_users, delete_user_by_id, get_db, init_app as init_db_app
 )
 
-load_dotenv() 
+load_dotenv()
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config['SECURITY_ENABLED'] = True
@@ -46,18 +47,53 @@ app.config.update(
     CELERY_RESULT_BACKEND=f'redis://{REDIS_HOST}:{REDIS_PORT}/0'
 )
 celery = make_celery(app)
+# Garante que este app Celery seja o "default" usado por @shared_task
+celery.set_default()
+
+# --- LOG DE VERIFICAÇÃO DE CONFIGURAÇÃO ---
+print("\n" + "="*60)
+print("🔍 VERIFICANDO CONFIGURAÇÕES DE CONEXÃO (app.py)")
+print(f"  - REDIS_HOST lido do .env: '{REDIS_HOST}'")
+print(f"  - REDIS_PORT lido do .env: '{REDIS_PORT}'")
+print(f"  - URL do Broker Celery: '{app.config['CELERY_BROKER_URL']}'")
+print(f"  - URL do Backend de Resultados Celery: '{app.config['CELERY_RESULT_BACKEND']}'")
+print("="*60 + "\n")
 
 # Inicializa o módulo de banco de dados com a aplicação
 init_db_app(app)
 
 # Anexa a conexão com o Redis ao app para ser usada em toda a aplicação
-app.redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=1, decode_responses=True)
+app.redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
 
 # Constantes de Segurança
 FAILED_ATTEMPT_WINDOW = 300  # 5 minutos em segundos
 MAX_FAILED_ATTEMPTS = 5
 # Lê o cooldown da API do agente do .env, com 15s como padrão.
 app.config['AGENT_API_COOLDOWN_SECONDS'] = int(os.getenv('AGENT_API_COOLDOWN_SECONDS', '15'))
+
+@worker_ready.connect
+def check_connections_on_worker_start(sender, **kwargs):
+    """
+    Executado quando um worker do Celery está pronto.
+    Verifica e loga o status das conexões essenciais no terminal do worker.
+    """
+    print("\n--- [Worker Celery] Verificando conexões na inicialização ---")
+    with sender.app.app_context():
+        # 1. Teste de conexão com o Redis
+        try:
+            sender.app.redis_client.ping()
+            print("✅ [Worker Celery] Conexão com o Redis (db=0) estabelecida com sucesso.")
+        except Exception as e:
+            print(f"❌ [Worker Celery] ERRO: Falha ao conectar ao Redis (db=0): {e}")
+
+        # 2. Teste de conexão com o Broker
+        try:
+            with sender.app.broker_connection() as conn:
+                conn.ensure_connection(max_retries=1)
+            print("✅ [Worker Celery] Conexão com o Broker (Fila) estabelecida com sucesso.")
+        except Exception as e:
+            print(f"❌ [Worker Celery] ERRO: Falha ao conectar ao Broker: {e}")
+    print("--- [Worker Celery] Pronto para receber tarefas. ---\n")
 
 #-----------------------------------------------------------------------
 # BLOCO DE DECORATORS E FUNÇÕES DE SEGURANÇA
@@ -71,9 +107,6 @@ def login_required(f):
             return redirect(url_for('change_password_page'))
         return f(*args, **kwargs)
     return decorated_function
-
-# Aplica o decorator de login a todas as rotas do Blueprint de agentes
-agents.agents_bp.before_request(login_required)
 
 # Registra o Blueprint na aplicação principal
 app.register_blueprint(agents.agents_bp)
@@ -119,7 +152,7 @@ def record_failed_attempt(ip):
     app.redis_client.zremrangebyscore(key, '-inf', now - FAILED_ATTEMPT_WINDOW)
     # Define um TTL para a chave, para que ela expire se não houver mais falhas
     app.redis_client.expire(key, FAILED_ATTEMPT_WINDOW)
-    
+
     # Se o número de tentativas exceder o limite, bloqueia o IP
     if app.redis_client.zcard(key) >= MAX_FAILED_ATTEMPTS:
         block_duration = BLOCK_DURATIONS[0]
@@ -194,13 +227,13 @@ def api_login():
 
     if user and check_password_hash(user['password'], password):
         app.redis_client.delete(f"failed:{ip}") # Limpa o contador de falhas em caso de sucesso
-        
+
         session.clear()
         session['logged_in'] = True
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['password_reset_required'] = user['password_reset_required']
-        
+
         redirect_url = url_for('change_password_page') if user['password_reset_required'] else url_for('dashboard')
         return jsonify({"success": True, "redirect_url": redirect_url})
     else:
@@ -280,9 +313,6 @@ def system_stats():
 #-----------------------------------------------------------------------
 # ROTAS DO PAINEL
 #-----------------------------------------------------------------------
-@app.route('/')
-def index():
-    return redirect(url_for('login_page'))
 
 def create_admin_user_if_not_exists():
     """Cria o usuário administrador padrão se ele não existir."""
@@ -298,7 +328,7 @@ def create_admin_user_if_not_exists():
 @login_required
 def dashboard():
     # --- Coleta de dados para os gráficos ---
-    
+
     # 1. Contagem de status das requisições
     status_codes = [log['status_code'] for log in request_log]
     status_counts = {
@@ -322,22 +352,32 @@ def dashboard():
         count = sum(1 for log in request_log if minute_start - 60 < log['timestamp'] <= minute_start)
         access_trend[minute_label] = count
 
-    # 4. Ranking de agentes mais requisitados (Top 5)
-    agent_ranking_raw = app.redis_client.zrevrange('agent_requests:ranking', 0, 4, withscores=True)
-    agent_ranking = {agent.decode('utf-8'): int(score) for agent, score in agent_ranking_raw}
+        # 4. Ranking de agentes mais requisitados (Top 5)
+        agent_ranking_raw = app.redis_client.zrevrange(
+            'agent_requests:ranking', 0, 4, withscores=True
+        )
+        agent_ranking = {
+            (agent.decode('utf-8') if isinstance(agent, bytes) else str(agent)): int(score)
+            for agent, score in agent_ranking_raw
+        }
 
-    # 5. Tarefas mais lentas (Top 5)
-    slowest_tasks_raw = app.redis_client.zrevrange('task_execution_time', 0, 4, withscores=True)
-    slowest_tasks = {task.decode('utf-8'): round(score, 2) for task, score in slowest_tasks_raw}
+        # 5. Tarefas mais lentas (Top 5)
+        slowest_tasks_raw = app.redis_client.zrevrange(
+            'task_execution_time', 0, 4, withscores=True
+        )
+        slowest_tasks = {
+            (task.decode('utf-8') if isinstance(task, bytes) else str(task)): round(float(score), 2)
+            for task, score in slowest_tasks_raw
+        }
 
-    return render_template(
-        'dashboard.html',
-        status_counts=status_counts,
-        security_counts=security_counts,
-        access_trend=dict(reversed(access_trend.items())), # Ordena do mais antigo para o mais novo
-        agent_ranking=agent_ranking,
-        slowest_tasks=slowest_tasks
-    )
+        return render_template(
+            'dashboard.html',
+            status_counts=status_counts,
+            security_counts=security_counts,
+            access_trend=dict(reversed(access_trend.items())),  # Ordena do mais antigo para o mais novo
+            agent_ranking=agent_ranking,
+            slowest_tasks=slowest_tasks
+        )
 
 @app.route('/queue-status')
 @login_required
@@ -382,17 +422,62 @@ def agents_page():
     return render_template('agents.html')
 
 #-----------------------------------------------------------------------
+# Gerenciamento de site
+#-----------------------------------------------------------------------
+@app.route('/')
+def index():
+    '''
+    informa como a rota "/" deve agir
+    informação puxada do .env
+    cada retorno informa qual pagina principal deve seguir
+    :return:
+    '''
+    index_base = os.getenv('PAGINA_INDEX', 'login')
+
+    if index_base == "login":
+        return redirect(url_for('login_page'))
+    elif index_base == "text":
+        return jsonify({"message": "API está funcional"})
+    elif index_base == "index":
+        return redirect(url_for('servir_pagina_estatica', nome_pagina=index_base))
+    else:
+        return redirect(url_for('login_page'))
+
+@app.route('/site/<path:nome_pagina>')
+def servir_pagina_estatica(nome_pagina):
+    # Verifica se o arquivo existe antes de servir
+    return send_from_directory('site/html', f"{nome_pagina}.html")
+
+
+#-----------------------------------------------------------------------
 # COMANDOS CLI PARA GERENCIAMENTO
 #-----------------------------------------------------------------------
 @app.cli.command("init-app")
 def init_app_command():
     """Inicializa o banco de dados e os serviços externos."""
-    init_db()
     with app.app_context():
+        init_db()
         migrate_db()
         create_admin_user_if_not_exists()
         print("Banco de dados e usuário admin inicializados.")
-    
+
+        # --- Verificação de Conexões ---
+        print("\n--- Verificando conexões externas ---")
+        # 1. Teste de conexão com o Redis (para segurança, métricas, etc.)
+        try:
+            app.redis_client.ping()
+            print("✅ Conexão com o Redis (db=0) estabelecida com sucesso.")
+        except redis.exceptions.ConnectionError as e:
+            print(f"❌ ERRO: Falha ao conectar ao Redis (db=0): {e}")
+
+        # 2. Teste de conexão com o Broker do Celery
+        try:
+            with celery.broker_connection() as connection:
+                connection.ensure_connection(max_retries=1)
+            print("✅ Conexão com o Broker Celery (Redis db=0) estabelecida com sucesso.")
+        except Exception as e:
+            print(f"❌ ERRO: Falha ao conectar ao Broker Celery: {e}")
+
     # Inicializa o modelo Gemini
     try:
         import google.generativeai as genai

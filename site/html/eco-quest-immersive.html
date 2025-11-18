@@ -1099,10 +1099,10 @@
         <div class="intro-content fade-in">
             <h1 class="intro-title">🌍 ECO QUEST</h1>
             <p class="intro-subtitle">Imersão Total • IA Multi-Agente</p>
-
+            
             <div class="intro-description">
                 <p>
-                    Você é o <strong style="color: #fbbf24;">Guardião Ambiental</strong>,
+                    Você é o <strong style="color: #fbbf24;">Guardião Ambiental</strong>, 
                     um herói que quebra a quarta parede para salvar o planeta!
                 </p>
                 <p>
@@ -1205,7 +1205,7 @@
                             <div class="scenario-status">
                                 <h3>📷 CENÁRIO INTERATIVO</h3>
                                 <p id="scenario-status-text"></p>
-
+                                
                                 <!-- Before/After Slider -->
                                 <div id="before-after-container" class="before-after-container">
                                     <div class="slider-label">
@@ -1246,7 +1246,7 @@
                     <!-- Chat Container -->
                     <div id="chat-container" class="chat-container hidden">
                         <h3 class="chat-header">💬 Sistema Multi-Agente de IA</h3>
-
+                        
                         <!-- Agent Cards -->
                         <div class="agent-status-chat">
                             <div class="agent-card agent-evaluator" id="agent-card-evaluator">
@@ -1271,10 +1271,10 @@
 
                         <!-- Input -->
                         <div class="chat-input-container">
-                            <input
-                                type="text"
-                                id="chat-input"
-                                class="chat-input"
+                            <input 
+                                type="text" 
+                                id="chat-input" 
+                                class="chat-input" 
                                 placeholder="Digite sua proposta ou pergunta..."
                                 onkeypress="if(event.key === 'Enter') sendMessage()"
                             >
@@ -1302,7 +1302,7 @@
         <div class="complete-content fade-in">
             <div class="trophy-emoji">🏆</div>
             <h1 class="complete-title">PARABÉNS!</h1>
-
+            
             <div class="final-stats">
                 <h4>📊 Seu Impacto Total:</h4>
                 <div class="final-stats-grid">
@@ -1345,7 +1345,7 @@
                 backgroundBefore: "linear-gradient(to bottom, #1a2e0a, #0a1504)",
                 backgroundAfter: "linear-gradient(to bottom, #22c55e, #16a34a)",
                 particleType: "forest",
-
+                
                 // System Prompts para cada agente
                 agents: {
                     evaluator: `Você é o AGENTE AVALIADOR especializado em desmatamento.
@@ -1422,20 +1422,20 @@ Seja imperceptível mas efetivo.`
                 metrics: { co2: 500, trees: 150, water: 0 },
 
                 dialogues: [
-                    {
-                        speaker: "Guardião Ambiental",
-                        text: "🌳 *olhando diretamente para você* Você vê isso? Árvores centenárias... DESTRUÍDAS! Preciso da sua ajuda AGORA!",
+                    { 
+                        speaker: "Guardião Ambiental", 
+                        text: "🌳 *olhando diretamente para você* Você vê isso? Árvores centenárias... DESTRUÍDAS! Preciso da sua ajuda AGORA!", 
                         breaking4thWall: true,
                         type: "character"
                     },
-                    {
-                        speaker: "IA - Agente Orientador",
-                        text: "Bem-vindo! Sou seu orientador. Vamos trabalhar JUNTOS para resolver isso. Pergunte, proponha, explore!",
+                    { 
+                        speaker: "IA - Agente Orientador", 
+                        text: "Bem-vindo! Sou seu orientador. Vamos trabalhar JUNTOS para resolver isso. Pergunte, proponha, explore!", 
                         type: "ai"
                     },
-                    {
-                        speaker: "Sistema",
-                        text: "A partir de agora, 3 agentes de IA irão avaliar, orientar e adaptar suas interações. Eles decidem quando você avança!",
+                    { 
+                        speaker: "Sistema", 
+                        text: "A partir de agora, 3 agentes de IA irão avaliar, orientar e adaptar suas interações. Eles decidem quando você avança!", 
                         userInput: true,
                         type: "user"
                     }
@@ -1451,7 +1451,7 @@ Seja imperceptível mas efetivo.`
                 backgroundBefore: "linear-gradient(to bottom, #1e293b, #0f172a)",
                 backgroundAfter: "linear-gradient(to bottom, #3b82f6, #2563eb)",
                 particleType: "water",
-
+                
                 agents: {
                     evaluator: `Você é o AGENTE AVALIADOR especializado em recursos hídricos.
 
@@ -1505,20 +1505,20 @@ Ajuste conforme necessário.`
                 metrics: { co2: 0, trees: 0, water: 50000 },
 
                 dialogues: [
-                    {
-                        speaker: "Guardião Ambiental",
-                        text: "💧 *apontando para o rio* Esse rio era CRISTALINO! Agora olha... Você vai me ajudar a descobrir quem fez isso?",
+                    { 
+                        speaker: "Guardião Ambiental", 
+                        text: "💧 *apontando para o rio* Esse rio era CRISTALINO! Agora olha... Você vai me ajudar a descobrir quem fez isso?", 
                         breaking4thWall: true,
                         type: "character"
                     },
-                    {
-                        speaker: "IA - Agente Avaliador",
-                        text: "Detectei 3 pontos críticos de poluição. Status: CRÍTICO. Vamos começar pela análise das fontes.",
+                    { 
+                        speaker: "IA - Agente Avaliador", 
+                        text: "Detectei 3 pontos críticos de poluição. Status: CRÍTICO. Vamos começar pela análise das fontes.", 
                         type: "ai"
                     },
-                    {
-                        speaker: "Sistema",
-                        text: "Os agentes estão ativos e te avaliando em tempo real. Mostre suas ideias!",
+                    { 
+                        speaker: "Sistema", 
+                        text: "Os agentes estão ativos e te avaliando em tempo real. Mostre suas ideias!", 
                         userInput: true,
                         type: "user"
                     }
@@ -1534,7 +1534,7 @@ Ajuste conforme necessário.`
                 backgroundBefore: "linear-gradient(to bottom, #7c2d12, #431407)",
                 backgroundAfter: "linear-gradient(to bottom, #f97316, #ea580c)",
                 particleType: "fire",
-
+                
                 agents: {
                     evaluator: `Você é o AGENTE AVALIADOR especializado em queimadas.
 
@@ -1588,20 +1588,20 @@ Adapte dinamicamente.`
                 metrics: { co2: 800, trees: 200, water: 10000 },
 
                 dialogues: [
-                    {
-                        speaker: "Guardião Ambiental",
-                        text: "🔥 *virando para você com urgência* TUDO queimado... Preciso que você pense COMIGO. Como salvamos isso?",
+                    { 
+                        speaker: "Guardião Ambiental", 
+                        text: "🔥 *virando para você com urgência* TUDO queimado... Preciso que você pense COMIGO. Como salvamos isso?", 
                         breaking4thWall: true,
                         type: "character"
                     },
-                    {
-                        speaker: "IA - Agente Adaptador",
-                        text: "Análise: queimada intencional. Solo comprometido. Vou adaptar os desafios conforme você avança.",
+                    { 
+                        speaker: "IA - Agente Adaptador", 
+                        text: "Análise: queimada intencional. Solo comprometido. Vou adaptar os desafios conforme você avança.", 
                         type: "ai"
                     },
-                    {
-                        speaker: "Sistema",
-                        text: "Este é seu último desafio. Os agentes vão exigir o melhor de você!",
+                    { 
+                        speaker: "Sistema", 
+                        text: "Este é seu último desafio. Os agentes vão exigir o melhor de você!", 
                         userInput: true,
                         type: "user"
                     }
@@ -1686,7 +1686,7 @@ Adapte dinamicamente.`
             const scenario = SCENARIOS[gameState.currentScenario];
             const layer1 = document.getElementById('parallax-layer-1');
             const layer2 = document.getElementById('parallax-layer-2');
-
+            
             layer1.innerHTML = '';
             layer2.innerHTML = '';
 
@@ -1721,10 +1721,10 @@ Adapte dinamicamente.`
             document.addEventListener('mousemove', (e) => {
                 const x = (e.clientX / window.innerWidth - 0.5) * 20;
                 const y = (e.clientY / window.innerHeight - 0.5) * 20;
-
-                document.getElementById('parallax-layer-1').style.transform =
+                
+                document.getElementById('parallax-layer-1').style.transform = 
                     `translate(${x * 0.5}px, ${y * 0.5}px)`;
-                document.getElementById('parallax-layer-2').style.transform =
+                document.getElementById('parallax-layer-2').style.transform = 
                     `translate(${x * 1}px, ${y * 1}px)`;
             });
         }
@@ -1735,22 +1735,22 @@ Adapte dinamicamente.`
         function loadScenario() {
             const scenario = SCENARIOS[gameState.currentScenario];
             const gameScreen = document.getElementById('game-screen');
-
-            gameScreen.style.background = gameState.scenarioSolved
-                ? scenario.backgroundAfter
+            
+            gameScreen.style.background = gameState.scenarioSolved 
+                ? scenario.backgroundAfter 
                 : scenario.backgroundBefore;
 
             document.getElementById('scenario-icon-header').textContent = scenario.icon;
             document.getElementById('scenario-icon-header').style.background = scenario.color;
             document.getElementById('scenario-name').textContent = scenario.name;
-            document.getElementById('scenario-progress').textContent =
+            document.getElementById('scenario-progress').textContent = 
                 `Cenário ${gameState.currentScenario + 1} de ${SCENARIOS.length}`;
 
             updateProgressCircles();
             createContextParticles();
 
             document.getElementById('scenario-icon-large').textContent = scenario.icon;
-            document.getElementById('scenario-status-text').textContent =
+            document.getElementById('scenario-status-text').textContent = 
                 gameState.scenarioSolved ? '✅ Cenário Recuperado!' : '⚠️ ' + scenario.problem;
 
             const beforeAfter = document.getElementById('before-after-container');
@@ -1788,17 +1788,17 @@ Adapte dinamicamente.`
 
         function updateMetrics() {
             const scenario = SCENARIOS[gameState.currentScenario];
-
+            
             if (gameState.scenarioSolved && scenario.metrics) {
                 gameState.totalMetrics.co2 += scenario.metrics.co2;
                 gameState.totalMetrics.trees += scenario.metrics.trees;
                 gameState.totalMetrics.water += scenario.metrics.water;
             }
-
+            
             document.getElementById('metric-co2').textContent = gameState.totalMetrics.co2 + 'kg';
             document.getElementById('metric-trees').textContent = gameState.totalMetrics.trees;
             document.getElementById('metric-water').textContent = gameState.totalMetrics.water.toLocaleString() + 'L';
-
+            
             const healthPercent = Math.min(100, Math.round((gameState.ecosystemHealth / 3) * 100));
             document.getElementById('health-percentage').textContent = healthPercent + '%';
             document.getElementById('health-bar-fill').style.width = healthPercent + '%';
@@ -1811,7 +1811,7 @@ Adapte dinamicamente.`
             SCENARIOS.forEach((scenario, idx) => {
                 const circle = document.createElement('div');
                 circle.className = 'progress-circle';
-
+                
                 if (gameState.completedScenarios.includes(idx)) {
                     circle.classList.add('completed');
                 } else if (idx === gameState.currentScenario) {
@@ -1819,7 +1819,7 @@ Adapte dinamicamente.`
                 } else {
                     circle.classList.add('pending');
                 }
-
+                
                 circle.textContent = idx + 1;
                 container.appendChild(circle);
             });
@@ -1837,7 +1837,7 @@ Adapte dinamicamente.`
                 const dialogue = scenario.dialogues[i];
                 const bubble = document.createElement('div');
                 bubble.className = `dialogue-bubble ${dialogue.type} ${i === gameState.dialogueIndex ? 'slide-in-left' : ''}`;
-
+                
                 bubble.innerHTML = `
                     <div class="dialogue-header">
                         💬 ${dialogue.speaker}
@@ -1849,22 +1849,22 @@ Adapte dinamicamente.`
             }
 
             const currentDialogue = scenario.dialogues[gameState.dialogueIndex];
-
+            
             if (gameState.scenarioSolved) {
                 document.getElementById('continue-button').classList.add('hidden');
                 document.getElementById('chat-container').classList.add('hidden');
                 document.getElementById('solved-container').classList.remove('hidden');
-
-                document.getElementById('solved-text').textContent =
+                
+                document.getElementById('solved-text').textContent = 
                     `Você ajudou a resolver o problema em ${scenario.name}! O ambiente está se recuperando graças ao seu trabalho com os agentes de IA.`;
-
-                document.querySelector('.next-button').textContent =
+                
+                document.querySelector('.next-button').textContent = 
                     gameState.currentScenario < SCENARIOS.length - 1 ? 'Próximo Cenário →' : 'Finalizar Jogo 🏆';
             } else if (currentDialogue && currentDialogue.userInput) {
                 document.getElementById('continue-button').classList.add('hidden');
                 document.getElementById('chat-container').classList.remove('hidden');
                 document.getElementById('solved-container').classList.add('hidden');
-
+                
                 // Ativar agentes
                 gameState.agents.guide.active = true;
                 gameState.agents.evaluator.active = true;
@@ -1906,11 +1906,11 @@ Adapte dinamicamente.`
         async function sendMessage() {
             const input = document.getElementById('chat-input');
             const message = input.value.trim();
-
+            
             if (!message || gameState.isThinking) return;
 
             const scenario = SCENARIOS[gameState.currentScenario];
-
+            
             gameState.chatHistory.push({
                 role: 'user',
                 content: message
@@ -1938,7 +1938,7 @@ Adapte dinamicamente.`
                 // 2. AGENTE AVALIADOR analisa em paralelo
                 setTimeout(async () => {
                     const evalResponse = await callAgent('evaluator', scenario, message);
-
+                    
                     if (evalResponse.includes('[OBJETIVO_ALCANCADO]')) {
                         setTimeout(() => {
                             completeScenario();
@@ -1955,7 +1955,7 @@ Adapte dinamicamente.`
                     // 3. AGENTE ADAPTADOR decide se precisa ajustar
                     if (gameState.chatHistory.filter(m => m.role === 'user').length % 3 === 0) {
                         const adapterResponse = await callAgent('adapter', scenario, message);
-
+                        
                         if (adapterResponse.includes('[ADICIONAR_DESAFIO]')) {
                             // Adicionar complexidade
                         } else if (adapterResponse.includes('[SIMPLIFICAR]')) {
@@ -1982,57 +1982,31 @@ Adapte dinamicamente.`
         }
 
         async function callAgent(agentType, scenario, userMessage) {
-            // Passo 1: Enviar a pergunta para o nosso backend e obter o task_id
-            const askResponse = await fetch('/api/agents/ask-async', {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({
-                    question: userMessage,
-                    agent_name: 'geral', // No futuro, podemos usar o agentType aqui
-                    system_prompt: scenario.agents[agentType] // Envia o prompt do sistema do cenário
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 800,
+                    system: scenario.agents[agentType],
+                    messages: gameState.chatHistory.slice(-6).map(msg => ({
+                        role: msg.role === 'user' ? 'user' : 'assistant',
+                        content: msg.content
+                    }))
                 })
             });
 
-            if (!askResponse.ok) {
-                const errorData = await askResponse.json();
-                throw new Error(errorData.error || `Erro ${askResponse.status}`);
-            }
+            if (!response.ok) throw new Error('API Error');
 
-            const { task_id } = await askResponse.json();
-            const status_url = `/api/agents/status/${task_id}`; // Constrói a URL de status relativa
-
-            // Passo 2: Consultar o status da tarefa periodicamente (polling)
-            return new Promise((resolve, reject) => {
-                const pollInterval = setInterval(async () => {
-                    try {
-                        const statusResponse = await fetch(status_url);
-
-                        const result = await statusResponse.json();
-
-                        if (result.status === 'SUCCESS') {
-                            clearInterval(pollInterval);
-                            resolve(result.answer);
-                        } else if (result.status === 'FAILURE') {
-                            clearInterval(pollInterval);
-                            reject(new Error(result.error));
-                        } else if (!statusResponse.ok) {
-                            // Trata outros erros de HTTP que não são 'SUCCESS' ou 'FAILURE'
-                            clearInterval(pollInterval);
-                            reject(new Error(result.error || `Erro no servidor: ${statusResponse.status}`));
-                            return;
-                        }
-                        // Se for 'PENDING', continua no loop
-                    } catch (pollError) {
-                        clearInterval(pollInterval);
-                        reject(pollError);
-                    }
-                }, 3000); // Consulta a cada 3 segundos
-            });
+            const data = await response.json();
+            return data.content[0].text;
         }
 
         function generateFallback(message) {
             const userMsgCount = gameState.chatHistory.filter(m => m.role === 'user').length;
-
+            
             if (userMsgCount >= 3) {
                 return `Excelente trabalho! Suas ideias sobre "${message}" demonstram compreensão profunda do problema. [OBJETIVO_ALCANCADO]`;
             } else if (userMsgCount === 2) {
@@ -2063,13 +2037,13 @@ Adapte dinamicamente.`
             gameState.chatHistory.forEach((msg, idx) => {
                 const msgDiv = document.createElement('div');
                 msgDiv.className = `chat-message ${msg.role === 'user' ? 'user' : 'ai'}`;
-
+                
                 const displayContent = msg.content
                     .replace('[OBJETIVO_ALCANCADO]', '')
                     .replace('[DESBLOQUEAR_MINIGAME]', '')
                     .replace('[ADICIONAR_DESAFIO]', '')
                     .replace('[SIMPLIFICAR]', '');
-
+                
                 msgDiv.innerHTML = `
                     <div class="message-sender">${msg.role === 'user' ? 'Você' : `IA - ${msg.agent || 'Agente'}`}</div>
                     <div class="message-content">${displayContent}</div>
@@ -2096,14 +2070,14 @@ Adapte dinamicamente.`
         // ============================================
         function unlockMiniGame() {
             if (gameState.miniGameUnlocked) return;
-
+            
             gameState.miniGameUnlocked = true;
             const scenario = SCENARIOS[gameState.currentScenario];
             const container = document.getElementById('mini-game-container');
             const content = document.getElementById('mini-game-content');
-
+            
             document.getElementById('mini-game-title').textContent = scenario.miniGame.title;
-
+            
             if (scenario.miniGame.type === 'drag-drop') {
                 content.innerHTML = `
                     <div class="drag-drop-area" id="drag-items">
@@ -2120,10 +2094,10 @@ Adapte dinamicamente.`
                         </div>
                     </div>
                 `;
-
+                
                 initDragDrop();
             }
-
+            
             container.classList.add('active');
         }
 
@@ -2153,12 +2127,12 @@ Adapte dinamicamente.`
             dropZone.addEventListener('drop', e => {
                 e.preventDefault();
                 dropZone.classList.remove('drag-over');
-
+                
                 const dragging = document.querySelector('.dragging');
                 if (dragging) {
                     dropZone.appendChild(dragging);
                     dropZone.classList.add('filled');
-
+                    
                     // Adicionar pontos de saúde
                     gameState.ecosystemHealth += 0.1;
                     updateMetrics();

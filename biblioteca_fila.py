@@ -12,9 +12,10 @@ def get_queue_info() -> dict:
     """
     try:
         # Conecta-se ao mesmo Redis que o Celery usa como BROKER (db=0 por padrão)
+        redis_host = os.getenv('REDIS_HOST', 'localhost')
         redis_port = os.getenv('REDIS_PORT', '16379')
         # Usamos decode_responses=False porque os dados da fila do Celery são bytes
-        r = redis.Redis(host='localhost', port=redis_port, db=0, decode_responses=False)
+        r = redis.Redis(host=redis_host, port=redis_port, db=0, decode_responses=False)
 
         # Por padrão, a fila principal do Celery se chama 'celery'
         # Em um sistema mais complexo, poderíamos escanear por chaves de fila

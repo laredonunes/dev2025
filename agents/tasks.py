@@ -15,21 +15,22 @@ def process_agent_request(self, message: dict) -> str:
     metadata = message.get("metadata", {})
 
     current_app.logger.info(
-        f"Dispatcher Celery (Tarefa {self.request.id}): "
-        f"Recebida requisição para o agente '{agent_name}' do usuário '{metadata.get('user_id')}'."
+        f"Dispatcher Celery (Task ID: {self.request.id}):\n"
+        f"  - Agente: '{agent_name}'\n"
+        f"  - Trace ID: {metadata.get('trace_id')}"
     )
 
     start_time = time.time()
 
     try:
         # Importa dinamicamente o módulo do agente a partir da pasta 'lambda'
-        # Ex: agent_name='agente_geral' -> import lambda.agente_geral
-        agent_module = importlib.import_module(f"lambda.{agent_name}")
+        # Ex: agent_name='agente_geral' -> import lambda_1.agente_geral
+        agent_module = importlib.import_module(f"lambda_1.{agent_name}")
         
         current_app.logger.info(f"Tarefa {self.request.id}: Executando lambda '{agent_name}'...")
         
         # Chama a função 'executar' dentro do módulo do agente
-        result = agent_module.executar(payload)
+        result = agent_module.executar(message) # Passa a mensagem completa para a lambda
         
         # --- Instrumentação ---
         execution_time = time.time() - start_time
