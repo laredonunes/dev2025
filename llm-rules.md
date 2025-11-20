@@ -4,57 +4,103 @@ Aê, meu chapa! Presta atenção aqui. Este arquivo é o mapa da mina pra mexer 
 
 ## 1. Visão Geral da Arquitetura
 
-O projeto é um **Gateway de API seguro**, tipo um porteiro bolado, feito com **Flask**. A parada tem três partes principais:
+O projeto agora tem dois focos principais:
 
-1.  **API Backend (`/api/*`)**: As rotas que fazem o trabalho sujo, com a lógica de negócio. Tem que ter segurança reforçada.
-2.  **Painel de Administração (`/login`, `/monitoring`)**: A área VIP, feita com Jinja2 (da pasta `templates`), pra gerenciar e ficar de olho no movimento.
-3.  **Site Estático (`/site/*`)**: A fachada da loja. Páginas HTML/CSS/JS que são servidas na moral, sem passar pela lógica do Flask.
+1.  **Painel de Administração**: A área logada (`/login`, `/monitoring`, etc.) para gerenciar a aplicação, usuários e segurança.
+2.  **Motor do RPG Ambiental**: O coração do projeto. É um sistema assíncrono com Front-end (`index.html`), Backend (Flask), Fila (RabbitMQ) e Workers (`sisMQ`) que executam os agentes Gemini.
 
-## 2. Meu Estilo de Código (LEIA COM ATENÇÃO!)
+---
 
-Pra gente se entender, o código tem que seguir a minha linha.
+<details>
+<summary><strong>🤖 Arquitetura do RPG Ambiental (LEIA COM ATENÇÃO!)</strong></summary>
 
--   **Organização é tudo!** Gosto de agrupar as coisas que trabalham juntas. Se tem uma rota de login, as funções auxiliares dela ficam logo acima.
+### Visão Geral do Fluxo do Jogo
 
--   **Divisórias para Organizar**: Use comentários com hífens pra separar blocos lógicos. Fica mais fácil de achar as paradas. Exemplo:
-    ```python
-    #-----------------------------------------------------------------------
-    # BLOCO DE AUTENTICAÇÃO: Funções e Rota de Login
-    #-----------------------------------------------------------------------
+1.  **Usuário** abre o `index.html` e inicia um cenário de desastre ambiental.
+2.  **Front-end** chama uma rota no backend (`/api/rpg/iniciar`) para começar a história.
+3.  **Backend (Flask)** recebe o pedido, monta uma "mensagem-tarefa" e a coloca na fila do **RabbitMQ**.
+4.  **Worker (`sisMQ`)**, que tá sempre de olho na fila, pega a tarefa.
+5.  O Worker usa um **dispatcher** para chamar a função de agente correta (ex: `processar_mensagem`).
+6.  O **Agente (Gemini)** processa a lógica, gera a narrativa ou as perguntas.
+7.  O Worker salva o resultado no banco de dados de registros (`registros.db`).
+8.  O **Front-end** fica perguntando pro backend (usando um `task_id`) se a tarefa já terminou. Quando termina, ele pega o resultado e mostra a continuação da história pro jogador.
 
-    def funcao_auxiliar_do_login():
-        # ...
+### Contrato de Comunicação (A Regra do Jogo)
 
-    @app.route('/login')
-    def login():
-        # ...
+#### 1. Front-end ↔ Backend (API REST)
+
+-   **`POST /api/rpg/iniciar`**: Começa um novo jogo.
+    -   **Envia**: `{ "user_id": "...", "desastre_inicial": "...", "diretriz_do_jogo": "..." }`
+    -   **Recebe**: `{ "trace_id": "...", "task_id": "...", "status": "PENDING" }`
+
+-   **`POST /api/rpg/interagir`**: Envia a resposta do jogador.
+    -   **Envia**: `{ "trace_id": "...", "resposta_usuario": "...", "contexto_atual": "..." }`
+    -   **Recebe**: `{ "trace_id": "...", "task_ids": {"principal": "..."}, "status": "PENDING" }`
+
+-   **`GET /api/rpg/resultado/<task_id>`**: O front usa essa rota pra saber se a tarefa terminou.
+    -   **Recebe**: `{ "status": "READY", "dados": { ...resultado do agente... } }`
+
+#### 2. Backend ↔ Fila (RabbitMQ) ↔ Worker (sisMQ)
+
+O **Backend** (Flask) é o **Produtor**. Ele só monta a mensagem e joga na fila.
+O **Worker** (`sisMQ`) é o **Consumidor**. Ele pega a mensagem e faz o trabalho.
+
+-   **Formato da Mensagem na Fila:** O worker espera receber um JSON com essa cara:
+    ```json
+    {
+      "action": "nome_da_funcao_a_chamar",
+      "payload": {
+        "agent_name": "nome_do_agente_gemini",
+        "question": "contexto_geral_da_historia",
+        "payload": { ...dados específicos... },
+        "metadata": {
+          "user_id": "...",
+          "trace_id": "...",
+          "task.id": "..."
+        }
+      }
+    }
     ```
 
--   **Funções Complexas em Arquivo Separado**: Se uma função ficar muito sinistra, com muita lógica, a gente joga ela pra um outro arquivo Python (tipo um `utils.py`) e importa. Assim o `app.py` fica mais limpo e é mais fácil de achar erro.
+-   **`ACTION_DISPATCHER` no `sisMQ/main.py`**: É o "case" que direciona o trabalho. Ele mapeia a `action` da mensagem para a função Python correta.
+    -   `"processar_mensagem"` → chama o agente que cria a narrativa.
+    -   `"gerar_perguntas_multipla_escolha"` → chama o agente que cria as opções.
+    -   `"avaliar_progresso_jogo"` → chama o agente que calcula o progresso.
+    -   `"atualizar_contexto_historico"` → chama o agente que resume a história.
 
--   **Estrutura do `app.py`**: Primeiro vêm os imports, depois as configurações, aí as funções auxiliarias (agrupadas por função) e, por último, as rotas do Flask.
+</details>
 
-## 3. Segurança em Primeiro Lugar (NÃO DÁ MOLE!)
+---
 
-Segurança aqui é papo sério.
+<details>
+<summary><strong>Estilo de Código e Organização</strong></summary>
 
--   **NUNCA, JAMAIS, EM HIPÓTESE ALGUMA** use f-strings ou concatenação pra montar consulta SQL. É caô na certa! Usa sempre consulta parametrizada (`?`) pra não dar brecha pra SQL Injection.
-    -   **Certo (Na moral):** `db.execute("SELECT * FROM user WHERE username = ?", (username,))`
-    -   **Errado (Vai dar ruim):** `db.execute(f"SELECT * FROM user WHERE username = '{username}'")`
+-   **Organização é tudo!** Agrupa as coisas que trabalham juntas. Funções auxiliares ficam perto da rota que as usa.
+-   **Divisórias para Organizar**: Use `#---...` pra separar blocos lógicos.
+-   **Funções Complexas em Arquivo Separado**: Lógica pesada vai pra um arquivo separado e a gente importa.
+-   **Estrutura do `app.py`**: Imports, configurações, funções auxiliares, e por último, as rotas.
 
--   **Senha é Segredo**: A gente não guarda senha dos outros em texto puro. O esquema é usar `werkzeug.security.generate_password_hash` pra guardar e `check_password_hash` pra conferir.
+</details>
 
--   **Mecanismo de Bloqueio**: Aquele esquema de bloquear IP (`failed_attempts`, `blocked_ips`) é o segurança da nossa festa. Entende ele antes de mexer em qualquer coisa de login.
+---
 
-## 4. Banco de Dados
+<details>
+<summary><strong>Segurança (NÃO DÁ MOLE!)</strong></summary>
 
--   **É na Raiz**: A gente tá usando `sqlite3` direto na veia. Nada de ORM (SQLAlchemy) por enquanto.
--   **Conexão na Boa**: Usa `get_db()` pra pegar a conexão e deixa que o `@app.teardown_appcontext` fecha ela no final. Sem neurose.
+-   **SQL Injection**: **NUNCA** use f-strings ou `+` pra montar consulta SQL. Usa sempre `?` (consultas parametrizadas).
+-   **Senhas**: Usa `generate_password_hash` e `check_password_hash`. Senha em texto puro é caô.
+-   **Mecanismo de Bloqueio**: Entende como o bloqueio de IP funciona antes de mexer em autenticação.
 
-## 5. Estilo de Código e Vocabulário
+</details>
 
--   **Idioma**: O papo aqui é **Português (Brasil)**.
--   **Sotaque**: Nos comentários, pode mandar a real, no **estilo carioca**. Sem formalidade, como se estivesse trocando uma ideia com um amigo. Usa gírias como "maneiro", "bolado", "caô", "na moral", "parada", "sinistro".
--   **Clareza**: O código tem que ser fácil de entender. Escreve o papo reto, sem inventar muita moda.
+---
+
+<details>
+<summary><strong>Banco de Dados e Vocabulário</strong></summary>
+
+-   **Banco de Dados**: A gente usa `sqlite3` direto na veia. Sem ORM.
+-   **Idioma e Sotaque**: O papo é **Português (Brasil)**, com **sotaque carioca** nos comentários. Manda a real, sem formalidade. Usa gírias como "maneiro", "bolado", "caô", "na moral", "parada", "sinistro".
+
+</details>
 
 Seguindo essas regras, o projeto vai ficar show de bola! É nós!

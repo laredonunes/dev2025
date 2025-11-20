@@ -1,11 +1,12 @@
 version: '3.8'
 
 services:
+  # --- SERVIÇOS EXISTENTES (Celery + Redis) ---
   redis:
     image: "redis:7-alpine"
-    container_name: redis_celery_broker
+    container_name: redis_service
     ports:
-      - "16379:6379"
+      - "6379:6379"
     volumes:
       - redis_data:/data
     restart: always
@@ -24,7 +25,7 @@ services:
     depends_on:
       - redis
 
-  worker:
+  celery_worker:
     build: .
     container_name: celery_worker
     volumes:
@@ -35,6 +36,44 @@ services:
     depends_on:
       - redis
       - web
+
+  # --- NOVOS SERVIÇOS (Microserviços com RabbitMQ) ---
+  rabbitmq:
+    image: "rabbitmq:3.13-management-alpine"
+    container_name: rabbitmq_service
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+    restart: always
+
+  sismq_worker:
+    build:
+      context: ./sisMQ
+      dockerfile: Dockerfile
+    container_name: sismq_worker
+    volumes:
+      - ./sisMQ:/sismq_app
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+    restart: always
+
+  sisagent2_worker: # <-- NOSSO NOVO SERVIÇO
+    build:
+      context: ./sisagent2 # Aponta para a pasta do sisagent2
+      dockerfile: Dockerfile # Assume que existe um Dockerfile lá
+    container_name: sisagent2_worker
+    volumes:
+      - ./sisagent2:/sisagent2_app # Mapeia a pasta para desenvolvimento
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+    restart: always
 
 volumes:
   redis_data:
